@@ -125,41 +125,6 @@ func (rect Rectangle) draw(scn screen) (err error) {
 	return nil
 }
 
-// // Function to draw a filled circle on the screen
-// func (circ Circle) draw(scn screen) error {
-// 	if outOfBounds(circ.cp, scn) {
-// 		return outOfBoundsErr
-// 	}
-// 	if colorUnknown(circ.c) {
-// 		return colorUnknownErr
-// 	}
-
-// 	x0, y0, r := circ.cp.x, circ.cp.y, circ.r
-// 	x := r
-// 	y := 0
-// 	err := 0
-
-// 	for x >= y {
-// 		// Draw horizontal lines within the circle
-// 		for i := y0 - y; i <= y0 + y; i++ {
-// 			for j := x0 - x; j <= x0 + x; j++ {
-// 				scn.drawPixel(j, i, circ.c)
-// 			}
-// 		}
-
-// 		// Increment y and adjust the error
-// 		y++
-// 		err += 2*y + 1
-
-// 		// Adjust x based on the error
-// 		if err > 0 {
-// 			x--
-// 			err -= 2*x + 1
-// 		}
-// 	}
-// 	return nil
-// }
-
 // https://stackoverflow.com/questions/51626905/drawing-circles-with-two-radius-in-golang
 // Function to draw a filled circle with rings on the screen
 func (circ Circle) draw(scn screen) error {
