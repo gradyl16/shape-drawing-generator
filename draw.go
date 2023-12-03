@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"math"
 )
 
 // TYPES
@@ -139,7 +140,7 @@ func (rect Rectangle) draw(scn screen) (err error) {
 	return nil
 }
 
-// https://stackoverflow.com/questions/51626905/drawing-circles-with-two-radius-in-golang
+// https://www.redblobgames.com/grids/circle-drawing/
 // Function to draw a filled circle with rings on the screen
 func (circ Circle) draw(scn screen) error {
 	if outOfBounds(circ.cp, scn) {
@@ -151,34 +152,31 @@ func (circ Circle) draw(scn screen) error {
 
 	x0, y0, r := circ.cp.x, circ.cp.y, circ.r
 
-	// Draw rings for each possible radius size
-	for ringRadius := 0; ringRadius <= r; ringRadius++ {
-		x := ringRadius
-		y := 0
-		err := 0
+	// Calculate the bounding box
+	top := int(math.Ceil(float64(y0 - r)))
+	bottom := int(math.Floor(float64(y0 + r)))
+	left := int(math.Ceil(float64(x0 - r)))
+	right := int(math.Floor(float64(x0 + r)))
 
-		for x >= y {
-			// Draw points in all octants to form a ring
-			scn.drawPixel(x0+x, y0-y, circ.c)
-			scn.drawPixel(x0+y, y0-x, circ.c)
-			scn.drawPixel(x0-y, y0-x, circ.c)
-			scn.drawPixel(x0-x, y0-y, circ.c)
-			scn.drawPixel(x0-x, y0+y, circ.c)
-			scn.drawPixel(x0-y, y0+x, circ.c)
-			scn.drawPixel(x0+y, y0+x, circ.c)
-			scn.drawPixel(x0+x, y0+y, circ.c)
-
-			if err <= 0 {
-				y++
-				err += 2*y + 1
-			}
-			if err > 0 {
-				x--
-				err -= 2*x + 1
+	// Draw the circle within the bounding box
+	for y := top; y <= bottom; y++ {
+		for x := left; x <= right; x++ {
+			tile := Point{x, y}
+			if inside_circle(circ.cp, tile, circ.r) {
+				scn.drawPixel(x, y, circ.c)
 			}
 		}
 	}
+
 	return nil
+}
+
+// Function to check if a tile is inside the circle
+func inside_circle(center Point, tile Point, radius int) bool {
+	dx := center.x - tile.x
+	dy := center.y - tile.y
+	distanceSquared := dx*dx + dy*dy
+	return distanceSquared <= radius*radius
 }
 
 // https://gabrielgambetta.com/computer-graphics-from-scratch/07-filled-triangles.html
