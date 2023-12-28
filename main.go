@@ -1,9 +1,12 @@
+// ## IMPORTS ##
+
 package main
 
 import (
 	"fmt"
 )
 
+// ## SAMPLE USAGE ##
 func main() {
 	fmt.Println("starting ...")
 

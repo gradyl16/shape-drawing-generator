@@ -1,70 +1,71 @@
+// ## IMPORTS ##
+
 package main
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"math"
 )
 
-// TYPES
 
-// Point struct to represent a point in 2D space
+// ## TYPE DEFINITIONS ##
+
+type Color int
+
+type RGB struct {
+	R Color
+	G Color
+	B Color
+}
+
+// Represents a coordinate pair in 2D space
 type Point struct {
 	x, y int
 }
 
-// Rectangle struct representing a rectangle
 type Rectangle struct {
-	ll Point
-	ur Point
+	ll Point  // Lower left corner
+	ur Point  // Upper right corner
 	c  Color
 }
 
-// Circle struct representing a circle
 type Circle struct {
-	cp Point
-	r  int
+	cp Point  // Center
+	r  int    // Radius
 	c  Color
 }
 
-// Triangle struct representing a triangle
 type Triangle struct {
-	pt0, pt1, pt2 Point
+	pt0, pt1, pt2 Point  // Vertices
 	c             Color
 }
 
-// Screen interface
-type screen interface {
-	initialize(maxX, maxY int)
-	getMaxXY() (int, int)
-	drawPixel(x, y int, c Color) error
-	getPixel(x, y int) (Color, error)
-	clearScreen()
-	screenShot(f string) error
-}
-
-// Geometry interface
-type geometry interface {
-	draw(scn screen) error
-	shape() string
-}
-
-// Display struct implementing the screen interface
+// Represents the screen
 type Display struct {
 	maxX, maxY int
 	matrix     [][]Color
 }
 
-type RGB struct {
-	R int
-	G int
-	B int
+
+// ## INTERFACE DEFINITIONS ##
+
+type screen interface {
+	initialize(maxX, maxY int)          // Initializes with max dimensions
+	getMaxXY() (int, int)               // Returns max dimensions 
+	drawPixel(x, y int, c Color) error  // Draws a pixel on the screen
+	getPixel(x, y int) (Color, error)   // Returns the color of a pixel
+	clearScreen()                       // Sets all pixels to white
+	screenShot(f string) error          // Generates .ppm image of screen
 }
 
-type Color int
+type geometry interface {
+	draw(scn screen) error
+	// shape() string --> TODO: Implement! :)
+}
 
-// GLOBAL CONSTANTS
+
+// ## GLOBAL CONSTANTS ##
 
 const (
 	red Color = iota
@@ -90,26 +91,92 @@ var cmap = [...]RGB{
 	{255, 255, 255}, // white
 }
 
-// Error constants
-var outOfBoundsErr = errors.New("geometry out of bounds")
-var colorUnknownErr = errors.New("color unknown")
+var errOutOfBounds = errors.New("geometry out of bounds")
+var errColorUnknown = errors.New("color unknown")
 
+
+// ## INTERFACE IMPLEMENTATIONS ##
 // HELPER FUNCTIONS
 
-// Function to check if a color is valid
-func colorUnknown(c Color) bool {
+func isColorUnknown(c Color) bool {
 	return !(c == red || c == green || c == blue || c == yellow ||
 		c == orange || c == purple || c == brown || c == black || c == white)
 }
 
-// Function to check if a point is out of bounds
-func outOfBounds(pt Point, scn screen) bool {
+func isOutOfBounds(pt Point, scn screen) bool {
 	maxX, maxY := scn.getMaxXY()
 	return pt.x < 0 || pt.x >= maxX || pt.y < 0 || pt.y >= maxY
 }
 
-// INTERFACE IMPLEMENTATIONS
+func isInsideCircle(center Point, tile Point, radius int) bool {
+	dx := center.x - tile.x
+	dy := center.y - tile.y
+	distanceSquared := dx*dx + dy*dy
+	return distanceSquared <= radius*radius
+}
 
+// SCREEN
+
+func (d *Display) getMaxXY() (int, int) {
+	return d.maxX, d.maxY
+}
+
+func (d *Display) getPixel(x, y int) (Color, error) {
+	if x < 0 || x >= d.maxX || y < 0 || y >= d.maxY {
+		return -1, errOutOfBounds
+	}
+	return d.matrix[y][x], nil
+}
+
+func (d *Display) drawPixel(x, y int, c Color) error {
+	if x < 0 || x >= d.maxX || y < 0 || y >= d.maxY {
+		return errOutOfBounds
+	}
+	d.matrix[y][x] = c
+	return nil
+}
+
+func (d *Display) clearScreen() {
+	for i := range d.matrix {
+		for j := range d.matrix[i] {
+			d.matrix[i][j] = white
+		}
+	}
+}
+
+func (d *Display) initialize(maxX, maxY int) {
+	d.maxX = maxX
+	d.maxY = maxY
+	d.matrix = make([][]Color, maxY)
+	for i := range d.matrix {
+		d.matrix[i] = make([]Color, maxX)
+	}
+	d.clearScreen()
+}
+
+func (d *Display) screenShot(f string) error {
+	file, err := os.Create(f + ".ppm")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fmt.Fprintf(file, "P3\n%d %d\n255\n", d.maxX, d.maxY)
+
+	for _, row := range d.matrix {
+		for _, color := range row {
+			pixel := cmap[color]
+			fmt.Fprintf(file, "%d %d %d ", pixel.R, pixel.G, pixel.B)
+		}
+		// Add a newline after each row
+		fmt.Fprint(file, "\n")
+	}
+	return nil
+}
+
+// GEOMETRY
+
+// Source:
 // https://gabrielgambetta.com/computer-graphics-from-scratch/07-filled-triangles.html
 func interpolate(l0, d0, l1, d1 int) (values []int) {
 	a := float64(d1-d0) / float64(l1-l0)
@@ -123,13 +190,12 @@ func interpolate(l0, d0, l1, d1 int) (values []int) {
 	return
 }
 
-// Function to draw a rectangle on the screen
 func (rect Rectangle) draw(scn screen) (err error) {
-	if outOfBounds(rect.ll, scn) || outOfBounds(rect.ur, scn) {
-		return outOfBoundsErr
+	if isOutOfBounds(rect.ll, scn) || isOutOfBounds(rect.ur, scn) {
+		return errOutOfBounds
 	}
-	if colorUnknown(rect.c) {
-		return colorUnknownErr
+	if isColorUnknown(rect.c) {
+		return errColorUnknown
 	}
 
 	for x := rect.ll.x; x <= rect.ur.x; x++ {
@@ -140,29 +206,29 @@ func (rect Rectangle) draw(scn screen) (err error) {
 	return nil
 }
 
+// Source:
 // https://www.redblobgames.com/grids/circle-drawing/
-// Function to draw a filled circle with rings on the screen
 func (circ Circle) draw(scn screen) error {
-	if outOfBounds(circ.cp, scn) {
-		return outOfBoundsErr
+	if isOutOfBounds(circ.cp, scn) {
+		return errOutOfBounds
 	}
-	if colorUnknown(circ.c) {
-		return colorUnknownErr
+	if isColorUnknown(circ.c) {
+		return errColorUnknown
 	}
 
 	x0, y0, r := circ.cp.x, circ.cp.y, circ.r
 
 	// Calculate the bounding box
-	top := int(math.Ceil(float64(y0 - r)))
-	bottom := int(math.Floor(float64(y0 + r)))
-	left := int(math.Ceil(float64(x0 - r)))
-	right := int(math.Floor(float64(x0 + r)))
+	top := int(float64(y0 - r))
+	bottom := int(float64(y0 + r))
+	left := int(float64(x0 - r))
+	right := int(float64(x0 + r))
 
 	// Draw the circle within the bounding box
 	for y := top; y <= bottom; y++ {
 		for x := left; x <= right; x++ {
 			tile := Point{x, y}
-			if inside_circle(circ.cp, tile, circ.r) {
+			if isInsideCircle(circ.cp, tile, circ.r) {
 				scn.drawPixel(x, y, circ.c)
 			}
 		}
@@ -171,21 +237,14 @@ func (circ Circle) draw(scn screen) error {
 	return nil
 }
 
-// Function to check if a tile is inside the circle
-func inside_circle(center Point, tile Point, radius int) bool {
-	dx := center.x - tile.x
-	dy := center.y - tile.y
-	distanceSquared := dx*dx + dy*dy
-	return distanceSquared <= radius*radius
-}
-
+// Source:
 // https://gabrielgambetta.com/computer-graphics-from-scratch/07-filled-triangles.html
 func (tri Triangle) draw(scn screen) (err error) {
-	if outOfBounds(tri.pt0, scn) || outOfBounds(tri.pt1, scn) || outOfBounds(tri.pt2, scn) {
-		return outOfBoundsErr
+	if isOutOfBounds(tri.pt0, scn) || isOutOfBounds(tri.pt1, scn) || isOutOfBounds(tri.pt2, scn) {
+		return errOutOfBounds
 	}
-	if colorUnknown(tri.c) {
-		return colorUnknownErr
+	if isColorUnknown(tri.c) {
+		return errColorUnknown
 	}
 
 	y0 := tri.pt0.y
@@ -229,69 +288,6 @@ func (tri Triangle) draw(scn screen) (err error) {
 		for x := x_left[y-y0]; x <= x_right[y-y0]; x++ {
 			scn.drawPixel(x, y, tri.c)
 		}
-	}
-	return nil
-}
-
-// Function to initialize the display
-func (d *Display) initialize(maxX, maxY int) {
-	d.maxX = maxX
-	d.maxY = maxY
-	d.matrix = make([][]Color, maxY)
-	for i := range d.matrix {
-		d.matrix[i] = make([]Color, maxX)
-	}
-	d.clearScreen()
-}
-
-// Function to get the maximum dimensions of the screen
-func (d *Display) getMaxXY() (int, int) {
-	return d.maxX, d.maxY
-}
-
-// Function to draw a pixel on the screen
-func (d *Display) drawPixel(x, y int, c Color) error {
-	if x < 0 || x >= d.maxX || y < 0 || y >= d.maxY {
-		return outOfBoundsErr
-	}
-	d.matrix[y][x] = c
-	return nil
-}
-
-// Function to get the color of a pixel on the screen
-func (d *Display) getPixel(x, y int) (Color, error) {
-	if x < 0 || x >= d.maxX || y < 0 || y >= d.maxY {
-		return -1, outOfBoundsErr
-	}
-	return d.matrix[y][x], nil
-}
-
-// Function to clear the whole screen
-func (d *Display) clearScreen() {
-	for i := range d.matrix {
-		for j := range d.matrix[i] {
-			d.matrix[i][j] = white
-		}
-	}
-}
-
-// Function to take a screenshot and save it as a ppm file
-func (d *Display) screenShot(f string) error {
-	file, err := os.Create(f + ".ppm")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	fmt.Fprintf(file, "P3\n%d %d\n255\n", d.maxX, d.maxY)
-
-	for _, row := range d.matrix {
-		for _, color := range row {
-			pixel := cmap[color]
-			fmt.Fprintf(file, "%d %d %d ", pixel.R, pixel.G, pixel.B)
-		}
-		// Add a newline after each row
-		fmt.Fprint(file, "\n")
 	}
 	return nil
 }
